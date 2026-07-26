@@ -31,29 +31,59 @@ namespace DepotDownloader
 
         public async Task UpdateServerList()
         {
-            var servers = await this.steamSession.steamContent.GetServersForSteamPipe();
+            this.servers.Clear();
+            nextServer = 0;
 
-            ProxyServer = servers.Where(x => x.UseAsProxy).FirstOrDefault();
+            IEnumerable<ContentServerCandidate> contentServers;
 
-            var weightedCdnServers = servers
-                .Where(server =>
-                {
-                    var isEligibleForApp = server.AllowedAppIds.Length == 0 || server.AllowedAppIds.Contains(appId);
-                    return isEligibleForApp && (server.Type == "SteamCache" || server.Type == "CDN");
-                })
-                .Select(server =>
-                {
-                    AccountSettingsStore.Instance.ContentServerPenalty.TryGetValue(server.Host, out var penalty);
-
-                    return (server, penalty);
-                })
-                .OrderBy(pair => pair.penalty).ThenBy(pair => pair.server.WeightedLoad);
-
-            foreach (var (server, weight) in weightedCdnServers)
+            if (ContentDownloader.Config.UseChinaCdn)
             {
-                for (var i = 0; i < server.NumEntries; i++)
+                ProxyServer = null;
+                contentServers = await ChinaCdnDirectory.ProbeAsync(
+                    steamSession,
+                    appId,
+                    (uint)ContentDownloader.Config.CellID);
+            }
+            else
+            {
+                var directoryServers = await this.steamSession.steamContent.GetServersForSteamPipe(
+                    (uint)ContentDownloader.Config.CellID);
+
+                ProxyServer = directoryServers.FirstOrDefault(server => server.UseAsProxy);
+
+                contentServers = directoryServers
+                    .Where(server =>
+                    {
+                        var isEligibleForApp =
+                            server.AllowedAppIds.Length == 0
+                            || server.AllowedAppIds.Contains(appId);
+                        return isEligibleForApp
+                            && (server.Type == "SteamCache" || server.Type == "CDN");
+                    })
+                    .Select(server => new ContentServerCandidate(
+                        server,
+                        server.SourceID,
+                        server.WeightedLoad,
+                        server.NumEntries));
+            }
+
+            var weightedCdnServers = contentServers
+                .Select(candidate =>
                 {
-                    this.servers.Add(server);
+                    AccountSettingsStore.Instance.ContentServerPenalty.TryGetValue(
+                        candidate.Server.Host,
+                        out var penalty);
+
+                    return (candidate, penalty);
+                })
+                .OrderBy(pair => pair.penalty)
+                .ThenBy(pair => pair.candidate.WeightedLoad);
+
+            foreach (var (candidate, _) in weightedCdnServers)
+            {
+                for (var i = 0; i < candidate.NumEntries; i++)
+                {
+                    this.servers.Add(candidate.Server);
                 }
             }
 

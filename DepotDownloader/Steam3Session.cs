@@ -40,6 +40,7 @@ namespace DepotDownloader
         readonly SteamApps steamApps;
         readonly SteamCloud steamCloud;
         readonly PublishedFile steamPublishedFile;
+        readonly ContentServerDirectory contentServerDirectory;
 
         readonly CallbackManager callbacks;
 
@@ -74,6 +75,7 @@ namespace DepotDownloader
             this.steamCloud = this.steamClient.GetHandler<SteamCloud>();
             var steamUnifiedMessages = this.steamClient.GetHandler<SteamUnifiedMessages>();
             this.steamPublishedFile = steamUnifiedMessages.CreateService<PublishedFile>();
+            this.contentServerDirectory = steamUnifiedMessages.CreateService<ContentServerDirectory>();
             this.steamContent = this.steamClient.GetHandler<SteamContent>();
 
             this.callbacks = new CallbackManager(this.steamClient);
@@ -277,6 +279,29 @@ namespace DepotDownloader
             }
 
             return requestCode;
+        }
+
+        public async Task<CContentServerDirectory_GetServersForSteamPipe_Response> GetContentServersForSteamPipe(
+            uint cellId,
+            uint maxServers,
+            string ipOverride)
+        {
+            var request = new CContentServerDirectory_GetServersForSteamPipe_Request
+            {
+                cell_id = cellId,
+                max_servers = maxServers,
+                ip_override = ipOverride,
+            };
+
+            var response = await contentServerDirectory.GetServersForSteamPipe(request);
+
+            if (response.Result != EResult.OK)
+            {
+                throw new InvalidOperationException(
+                    $"Steam content directory returned {response.Result} for probe {ipOverride}.");
+            }
+
+            return response.Body;
         }
 
         public async Task RequestCDNAuthToken(uint appid, uint depotid, Server server)

@@ -33,6 +33,9 @@ jobs:
       - name: Build
         run: dotnet publish DepotDownloader/DepotDownloader.csproj -c ${{ matrix.configuration }} -o artifacts /p:ContinuousIntegrationBuild=true
 
+      - name: Test
+        run: dotnet test DepotDownloader.Tests/DepotDownloader.Tests.csproj -c ${{ matrix.configuration }} /p:ContinuousIntegrationBuild=true
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         if: matrix.configuration == 'Release' && matrix.runs-on == 'windows-latest'

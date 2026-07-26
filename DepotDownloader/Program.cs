@@ -87,12 +87,27 @@ namespace DepotDownloader
             ContentDownloader.Config.DownloadManifestOnly = HasParameter(args, "-manifest-only");
 
             var cellId = GetParameter(args, "-cellid", -1);
+            if (cellId < -1)
+            {
+                Console.WriteLine("Error: -cellid must not be negative.");
+                return 1;
+            }
+
             if (cellId == -1)
             {
                 cellId = 0;
             }
 
             ContentDownloader.Config.CellID = cellId;
+            ContentDownloader.Config.UseChinaCdn = HasParameter(args, "-china-cdn");
+
+            if (ContentDownloader.Config.UseChinaCdn && ContentDownloader.Config.CellID == 0)
+            {
+                // Shanghai is Steam cell 47. The directory probe still verifies the
+                // returned source IDs, so this preference can never cause an
+                // unverified overseas fallback.
+                ContentDownloader.Config.CellID = 47;
+            }
 
             var fileList = GetParameter<string>(args, "-filelist");
 
@@ -138,7 +153,14 @@ namespace DepotDownloader
 
             ContentDownloader.Config.VerifyAll = HasParameter(args, "-verify-all") || HasParameter(args, "-verify_all") || HasParameter(args, "-validate");
 
-            if (HasParameter(args, "-use-lancache"))
+            var useLancache = HasParameter(args, "-use-lancache");
+            if (ContentDownloader.Config.UseChinaCdn && useLancache)
+            {
+                Console.WriteLine("Error: -china-cdn can not be combined with -use-lancache.");
+                return 1;
+            }
+
+            if (useLancache)
             {
                 await Client.DetectLancacheServerAsync();
                 if (Client.UseLancacheServer)
@@ -526,6 +548,7 @@ namespace DepotDownloader
             Console.WriteLine("  -validate                - include checksum verification of files already downloaded");
             Console.WriteLine("  -manifest-only           - downloads a human readable manifest for any depots that would be downloaded.");
             Console.WriteLine("  -cellid <#>              - the overridden CellID of the content server to download from.");
+            Console.WriteLine("  -china-cdn               - probe for mainland China content servers and refuse overseas fallback.");
             Console.WriteLine("  -max-downloads <#>       - maximum number of chunks to download concurrently. (default: 8).");
             Console.WriteLine("  -loginid <#>             - a unique 32-bit integer Steam LogonID in decimal, required if running multiple instances of DepotDownloader concurrently.");
             Console.WriteLine("  -use-lancache            - forces downloads over the local network via a Lancache instance.");

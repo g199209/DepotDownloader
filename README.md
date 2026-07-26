@@ -100,6 +100,7 @@ Parameter               | Description
 `-validate`             | include checksum verification of files already downloaded.
 `-manifest-only`        | downloads a human readable manifest for any depots that would be downloaded.
 `-cellid <#>`           | the overridden CellID of the content server to download from.
+`-china-cdn`            | probe for mainland China content servers and refuse overseas fallback.
 `-max-downloads <#>`    | maximum number of chunks to download concurrently. (default: 8).
 `-use-lancache`         | forces downloads over the local network via a Lancache instance.
 
@@ -129,3 +130,24 @@ Steam allows developers to block downloading old manifests, in which case no man
 ### Why am I getting slow download speeds and frequent connection timeouts?
 When downloading old builds, cache server may not have the chunks readily available which makes downloading slower.
 Try increasing `-max-downloads` to saturate the network more.
+
+### How do I force downloads through mainland China CDNs?
+
+Pass `-china-cdn`. DepotDownloader will query Steam's content directory from
+multiple mainland network perspectives, retain only content source IDs currently
+assigned to mainland delivery partners, and print the selected hosts before
+downloading. If Steam returns no eligible mainland server for the requested app,
+the download stops instead of falling back to an overseas CDN.
+
+The mode defaults to Steam cell 47 (Shanghai) unless `-cellid` is also supplied.
+The location hints used during discovery are internal; no `-ip-override` value is
+required.
+
+For example:
+
+```text
+DepotDownloader -app 3321460 -depot 3321461 -manifest 8754404869727768955 -china-cdn -qr -remember-password -validate -dir "Crimson Desert"
+```
+
+`-china-cdn` cannot be combined with `-use-lancache`, because LANCache replaces
+the content-server routing that this mode verifies.
